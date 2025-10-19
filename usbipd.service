@@ -1,0 +1,12 @@
+[Unit]
+Description=USB/IP daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/usbipd -D
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=on-failure
+Type=forking
+
+[Install]
+WantedBy=multi-user.target
