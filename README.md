@@ -3,6 +3,7 @@
 ## install and configure usbip server on raspberry pi
 ```
 sudo apt-get install usbip
+sudo apt install linux-tools-common linux-tools-generic
 ```
 
 list available usb devices
