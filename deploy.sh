@@ -35,6 +35,11 @@ trap cleanup EXIT
 
 props_of() { udevadm info -q property -p "$1" 2>/dev/null || true; }
 
+# True if the installed rule would export this device.
+rule_exports() {
+    udevadm test --action=add "$1" 2>&1 | grep -q "run: '/usr/bin/usbip bind"
+}
+
 is_input() {
     case "$1" in
         *:030101:*|*:030102:*) return 0 ;;
@@ -89,17 +94,18 @@ for d in /sys/bus/usb/devices/*-* /sys/bus/usb/devices/usb*; do
     echo "    ok: $busid $kind stays local"
 done
 
-# Bring back anything that an earlier setup exported.
-echo "==> Unbinding any exported keyboard/mouse/hub"
+# Release anything already exported that the new rule no longer wants.
+# This covers keyboards, mice, hubs, and devices excluded by VID:PID (e.g. webcam).
+echo "==> Releasing exported devices the rule no longer exports"
 while IFS= read -r busid; do
     [ -n "$busid" ] || continue
     d=/sys/bus/usb/devices/$busid
-    ifaces=$(props_of "$d" | sed -n 's/^ID_USB_INTERFACES=//p')
-    devclass=$(cat "$d/bDeviceClass" 2>/dev/null || true)
-    if has_boot_hid "$d" || is_input "$ifaces" || [ "$devclass" = "09" ]; then
-        echo "    usbip unbind -b $busid"
-        run_root usbip unbind -b "$busid" || true
+    [ -d "$d" ] || continue
+    if rule_exports "$d"; then
+        continue
     fi
+    echo "    usbip unbind -b $busid"
+    run_root usbip unbind -b "$busid" || true
 done < <(find /sys/bus/usb/drivers/usbip-host -mindepth 1 -maxdepth 1 -type l -printf '%f\n' 2>/dev/null)
 
 echo "==> Applying the rule to devices already connected"
@@ -117,18 +123,18 @@ else
     echo "    (none)"
 fi
 
-# Final check: nothing forbidden may be exported.
+# Final check: every remaining export must still be wanted by the rule.
 FAILED=0
 while IFS= read -r busid; do
     [ -n "$busid" ] || continue
     d=/sys/bus/usb/devices/$busid
-    ifaces=$(props_of "$d" | sed -n 's/^ID_USB_INTERFACES=//p')
-    devclass=$(cat "$d/bDeviceClass" 2>/dev/null || true)
-    if has_boot_hid "$d" || is_input "$ifaces" || [ "$devclass" = "09" ]; then
-        echo "WARNING: $busid should stay local but is exported; unbinding it now." >&2
-        run_root usbip unbind -b "$busid" || true
-        FAILED=1
+    [ -d "$d" ] || continue
+    if rule_exports "$d"; then
+        continue
     fi
+    echo "WARNING: $busid is exported but the rule says it should stay local; unbinding it now." >&2
+    run_root usbip unbind -b "$busid" || true
+    FAILED=1
 done <<< "$exported"
 
 [ "$FAILED" -eq 0 ] || exit 1

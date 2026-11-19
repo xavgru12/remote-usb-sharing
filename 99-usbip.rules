@@ -12,6 +12,10 @@ ENV{DEVTYPE}!="usb_device", GOTO="usbip_auto_bind_end"
 # and unbinding the hub driver would disconnect everything behind it.
 ATTR{bDeviceClass}=="09", GOTO="usbip_auto_bind_end"
 
+# Keep the local webcam on this machine: Logitech HD WebCam C270 (046d:0825).
+# It is used locally with Cheese; USB/IP would take it away from uvcvideo.
+ATTR{idVendor}=="046d", ATTR{idProduct}=="0825", GOTO="usbip_auto_bind_end"
+
 # USB HID boot keyboard interface: class 03, subclass 01, protocol 01.
 # Keep every keyboard on this machine (local input must keep working).
 ENV{ID_USB_INTERFACES}=="*:030101:*", GOTO="usbip_auto_bind_end"
