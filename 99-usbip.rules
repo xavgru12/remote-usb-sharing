@@ -1,1 +1,26 @@
-ACTION=="add", SUBSYSTEMS=="usb", ATTR{idProduct}!="XXXX", ATTR{idVendor}!="YYYY", RUN{program}+="/usr/sbin/usbip bind -b %k"
+# USB/IP auto-export rules.
+# Export every USB device except hubs and USB keyboards/mice.
+#
+# Matching uses stable USB descriptors, never the port or busid.
+# The only busid used is %k, the one assigned for the current plug event.
+
+ACTION!="add", GOTO="usbip_auto_bind_end"
+SUBSYSTEM!="usb", GOTO="usbip_auto_bind_end"
+ENV{DEVTYPE}!="usb_device", GOTO="usbip_auto_bind_end"
+
+# Hubs (bDeviceClass 09) must never be bound: USB/IP cannot export a hub,
+# and unbinding the hub driver would disconnect everything behind it.
+ATTR{bDeviceClass}=="09", GOTO="usbip_auto_bind_end"
+
+# USB HID boot keyboard interface: class 03, subclass 01, protocol 01.
+# Keep every keyboard on this machine (local input must keep working).
+ENV{ID_USB_INTERFACES}=="*:030101:*", GOTO="usbip_auto_bind_end"
+
+# USB HID boot mouse interface: class 03, subclass 01, protocol 02.
+# Keep every mouse on this machine.
+ENV{ID_USB_INTERFACES}=="*:030102:*", GOTO="usbip_auto_bind_end"
+
+# Everything else is exported: loggers, debuggers, card readers, other HID.
+RUN{program}+="/usr/bin/usbip bind -b %k"
+
+LABEL="usbip_auto_bind_end"
